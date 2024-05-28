@@ -60,7 +60,8 @@ class SyntheticDataLoader(BaseDataLoader):
             bin_size = time_range / params['num_bins']
             binned_event_time = np.floor((event_times - min_time) / bin_size)
             binned_event_time[binned_event_time == params['num_bins']] = params['num_bins'] - 1 
-        self.X = pd.DataFrame(raw_data)
+        columns = [f'x{num}' for num in range(1, raw_data.shape[1]+1)]
+        self.X = pd.DataFrame(raw_data, columns=columns)
         self.y = convert_to_structured(binned_event_time, labels)
         self.num_features = self._get_num_features(self.X)
         self.cat_features = self._get_cat_features(self.X)
@@ -72,8 +73,8 @@ class SyntheticDataLoader(BaseDataLoader):
     '''
     def make_synthetic(self):
         num_event = 1
-        num_data = 1000
-        num_feat = 5 #in each segment, total = 15 (5 features x 3 segments)
+        num_data = 1000 # def. 1000
+        num_feat = 2 #in each segment, total = 15 (5 features x 3 segments) # def. 5.
         
         #construct covariates
         bounds = np.array([-5, -10, 5, 10])
