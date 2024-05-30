@@ -2,6 +2,7 @@ numpy~=1.23.0
 pandas~=1.5.3
 torch==1.13.1
 torchvision==0.14.1
+torchtuples==0.2.2
 scikit-learn~=1.2.2
 scikit-survival~=0.21.0
 scikit-multilearn==0.2.0
