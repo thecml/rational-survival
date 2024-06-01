@@ -1,6 +1,6 @@
 import pandas as pd
 import torchtuples as tt
-from deephit.models import base, loss
+from deephit.models import base
 from deephit.models.utils import pad_col
 from deephit.preprocessing import label_transforms
 from deephit.models.interpolation import InterpolatePMF

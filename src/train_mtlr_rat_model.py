@@ -4,10 +4,13 @@ import config as cfg
 import torch
 import random
 import warnings
-from mtlr import mtlr, train_mtlr_model, make_mtlr_prediction
+from mtlr import Encoder, train_mtlr_model, train_mtlr_rat_model, make_mtlr_prediction
 from utility import dotdict, preprocess_data, make_time_bins, make_stratified_split, convert_to_structured, split_time_event
 from data_loader import SyntheticDataLoader
 from sksurv.metrics import concordance_index_censored
+
+# Rational extration
+from rational.generator import Generator
 
 warnings.filterwarnings("ignore", message=".*The 'nopython' keyword.*")
 
@@ -57,13 +60,27 @@ if __name__ == "__main__":
     data_test["time"] = pd.Series(y_test['time'])
     data_test["event"] = pd.Series(y_test['event']).astype(int)
     num_features = X_train.shape[1]
-     
-    # Load config, train model
+    
+    # Make generators
+    args = dotdict(cfg.PARAMS_RATIONAL)
+    args['dropout'] = 0.25
+    n_intervals = len(time_bins)
+    generators = list()
+    for i in range(n_intervals):
+        gen = Generator(num_features, args=args)
+        generators.append(gen)
+        
+    # Make encoders
     config = dotdict(cfg.PARAMS_MTLR)
     num_time_bins = len(time_bins)
-    model = mtlr(in_features=num_features, num_time_bins=num_time_bins, config=config)
-    model = train_mtlr_model(model, data_train, data_valid, time_bins,
-                             config, random_state=0, reset_model=True, device=device)
+    encoders = list()
+    for i in range(n_intervals):
+        enc = Encoder(in_features=num_features, num_time_bins=num_time_bins, config=config)
+        encoders.append(enc)
+     
+    # Load config, train model
+    model = train_mtlr_rat_model(generators, encoders, data_train, data_valid, time_bins,
+                                 config, random_state=0, reset_model=True, device=device, args=args)
 
     # Make predictions
     x_test = torch.tensor(data_test.drop(["time", "event"], axis=1).values, dtype=torch.float, device=device)

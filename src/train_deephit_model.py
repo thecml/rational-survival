@@ -68,7 +68,8 @@ if __name__ == "__main__":
         torch.nn.ReLU(),
         torch.nn.BatchNorm1d(32),
         torch.nn.Dropout(0.1),
-        torch.nn.Linear(32, out_features))
+        torch.nn.Linear(32, out_features)
+    )
     
     # Train Deephit
     model = DeepHitSingle(net, tt.optim.Adam, alpha=0.2, sigma=0.1, duration_index=labtrans.cuts)
@@ -85,4 +86,5 @@ if __name__ == "__main__":
     # Make predictions
     surv = model.predict_surv_df(X_test)
     print(surv.T)
+
 

@@ -48,3 +48,39 @@ PARAMS_MTLR = {
     'early_stop': True,
     'patience': 10
 }
+
+PARAMS_RATIONAL = {
+    'train': True,
+    'test': True,
+    'cuda': False,
+    'num_gpus': 1,
+    'debug_mode': False,
+    'class_balance': False,
+    'objective': 'cross_entropy',
+    'aspect': 'overall',
+    'init_lr': 0.001,
+    'epochs': 20,
+    'batch_size': 32,
+    'patience': 10,
+    'tuning_metric': 'loss',
+    'save_dir': 'snapshot',
+    'results_path': 'results',
+    'snapshot': None,
+    'num_workers': 4,
+    'model_form': 'mlp',
+    'hidden_dim': 100,
+    'num_layers': 3,
+    'dropout': 0.25,
+    'weight_decay': 1e-3,
+    'dataset': 'news_group',
+    'embedding': 'glove',
+    'gumbel_temprature': 1,
+    'gumbel_decay': 1e-5,
+    'get_rationales': True,
+    'selection_lambda': 0.01,
+    'continuity_lambda': 0.01,
+    'num_class': 2,
+    'use_as_tagger': False,
+    'tag_lambda': 0.5
+}
+    
