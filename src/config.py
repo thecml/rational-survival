@@ -37,7 +37,7 @@ SYNTHETIC_SETTINGS = {
 
 PARAMS_MTLR = {
     'hidden_size': 32,
-    'verbose': False,
+    'verbose': True,
     'lr': 0.00008,
     'c1': 0.01,
     'num_epochs': 100,

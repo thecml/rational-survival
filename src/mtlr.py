@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
 from utility import reformat_survival
 from rational import learn
+from collections import defaultdict
 
 class dotdict(dict):
     """dot.notation access to dictionary attributes"""
@@ -220,12 +221,6 @@ def train_mtlr_rat_model(
     for (gen, enc) in zip(generators, encoders):
         optimizer = get_optimizer([gen, enc], args)
         optimizers.append(optimizer)
-        
-    # Put gens in training mode
-    for gen in generators:
-        gen.train()
-    for enc in encoders:
-        enc.train()
     
     #if reset_model:
     #    model.reset_parameters()
@@ -234,27 +229,32 @@ def train_mtlr_rat_model(
     #model.train()
     best_val_nll = np.inf
     best_ep = -1
+    n_time_bins = len(time_bins)
 
     pbar = trange(config.num_epochs, disable=not config.verbose)
 
     start_time = datetime.now()
     x, y = reformat_survival(data_train, time_bins)
     x_val, y_val = reformat_survival(data_val, time_bins)
-    x_val, y_val = x_val.to(device), y_val.to(device)
     train_loader = DataLoader(TensorDataset(x, y), batch_size=config.batch_size, shuffle=True)
-    for k in pbar:
+    valid_loader = DataLoader(TensorDataset(x_val, y_val), batch_size=config.batch_size, shuffle=False)
+    for i in pbar:
         nll_loss = 0
         step = 0
+        
+        # Training
         for xi, yi in train_loader:
+            for gen in generators:
+                gen.train()
+            for enc in encoders:
+                enc.train()
+            
             xi, yi = xi.to(device), yi.to(device)
+            xi = xi[:, :, None]
             
             step += 1
             if step % 100 == 0 or args.debug_mode:
                 args.gumbel_temprature = max(np.exp((step+1) *-1* args.gumbel_decay), .05)
-            
-            xi = xi[:, :, None]
-            if args.cuda:
-                xi, yi = xi.cuda(), yi.cuda()
             
             for optimizer in optimizers:
                 optimizer.zero_grad()
@@ -270,7 +270,7 @@ def train_mtlr_rat_model(
             
             total_loss = []
             features = []
-            for k in range(len(masks)): # for each pair of (enc, gen, mask)
+            for k in range(n_time_bins): # for each pair of (enc, gen, mask)
                 logits = encoders[k].forward(xi, mask=masks[k])
                 
                 # change yi so that events are consistent
@@ -300,29 +300,92 @@ def train_mtlr_rat_model(
                 batch_rationales = learn.get_rationales(masks[k])
                 features.append(batch_rationales)
             
-            print(f"{total_loss[0]} - {total_loss[5]} - {total_loss[10]}")
+            #print(f"{total_loss[0]} - {total_loss[5]} - {total_loss[10]}")
             #nll_loss += (loss / train_size).item()
 
-        """
-        logits_outputs = model.forward(x_val)
-        eval_nll = mtlr_nll(logits_outputs, y_val, C1=0, average=True)
-        eval_nll = 0
+        # Validation
+        valid_rationales = defaultdict(int)
+        nll_losses, selection_losses = list(), list()
+        for xi, yi in valid_loader:
+            for gen in generators:
+                gen.eval()
+            for enc in encoders:
+                enc.eval()
+                
+            xi, yi = xi.to(device), yi.to(device)
+            xi = xi[:, :, None]
+            
+            masks = list()
+            if args.get_rationales:
+                for gen in generators:
+                    mask, _ = gen(xi)
+                    masks.append(mask)
+            else:
+                for gen in generators:
+                    masks.append(None)
+            
+            batch_val_loss, batch_seleciton_cost = 0, 0
+            for k in range(n_time_bins):
+                logits = encoders[k].forward(xi, mask=masks[k])
+                yi_clamp = yi.cumsum(dim=1).clamp(max=1)
+                yi_long = yi_clamp.long()
+                yi_one_hot = torch.nn.functional.one_hot(yi_long, num_classes=2)
+                yi_one_hot = yi_one_hot.float()
+                yi_one_hot_t = torch.transpose(yi_one_hot, 1, 2)
+                criterion = nn.BCELoss()
+                logits_probs = F.softmax(logits, dim=1)
+                val_loss_k = criterion(logits_probs, yi_one_hot_t[:,:,k])
+                
+                if args.get_rationales:
+                    selection_cost = generators[k].loss(masks[k], xi)
+                    val_loss_k += args.selection_lambda * selection_cost
+                    batch_seleciton_cost += selection_cost.detach().numpy()
+                
+                batch_val_loss += val_loss_k.detach().numpy()
+                
+                if args.get_rationales:
+                    batch_rationales_k = learn.get_rationales(masks[k])
+                    for feature_list in batch_rationales_k:
+                        for feature in feature_list:
+                            valid_rationales[feature] += 1
+                
+            batch_val_loss /= n_time_bins
+            
+            if args.get_rationales:
+                batch_seleciton_cost /= n_time_bins
+            
+            nll_losses.append(batch_val_loss)
+            
+            if args.get_rationales:
+                selection_losses.append(batch_seleciton_cost)
+        
+        if args.get_rationales:
+            valid_rationales = dict(valid_rationales)
+            valid_rationales = dict(sorted(valid_rationales.items(),
+                                           key=lambda item: item[1], reverse=True))
+            
+        mean_valid_nll = np.mean(nll_losses)
+        
+        if args.get_rationales:
+            mean_valid_selection = np.mean(selection_losses)
+        
         pbar.set_description(f"[epoch {k + 1: 4}/{config.num_epochs}]")
-        pbar.set_postfix_str(f"nll-loss = {nll_loss:.4f}; "
-                                f"Validation nll = {eval_nll.item():.4f};")
+        if args.get_rationales:
+            pbar.set_postfix_str(f"Valid nll = {mean_valid_nll.item():.4f}; " 
+                                 f"Valid selection = {mean_valid_selection:.4f};")
+        else:
+            pbar.set_postfix_str(f"Valid nll = {mean_valid_nll.item():.4f};")
         if config.early_stop:
-            if best_val_nll > eval_nll:
-                best_val_nll = eval_nll
+            if best_val_nll > mean_valid_nll:
+                best_val_nll = mean_valid_nll
                 best_ep = k
             if (k - best_ep) > config.patience:
                 break
-        """
             
     end_time = datetime.now()
     training_time = end_time - start_time
-    # model.eval()
+    
     return encoders
-
 
 def train_mtlr_model(
         model: nn.Module,
@@ -373,7 +436,7 @@ def train_mtlr_model(
         eval_nll = mtlr_nll(logits_outputs, y_val, model, C1=0, average=True)
         pbar.set_description(f"[epoch {i + 1: 4}/{config.num_epochs}]")
         pbar.set_postfix_str(f"nll-loss = {nll_loss:.4f}; "
-                                f"Validation nll = {eval_nll.item():.4f};")
+                             f"Validation nll = {eval_nll.item():.4f};")
         if config.early_stop:
             if best_val_nll > eval_nll:
                 best_val_nll = eval_nll
