@@ -79,10 +79,11 @@ if __name__ == "__main__":
         encoders.append(enc)
      
     # Load config, train model
-    model = train_mtlr_rat_model(generators, encoders, data_train, data_valid, time_bins,
-                                 config, random_state=0, reset_model=True, device=device, args=args)
+    trained_encoders = train_mtlr_rat_model(generators, encoders, data_train, data_valid, time_bins,
+                                            config, random_state=0, reset_model=True, device=device, args=args)
 
     # Make predictions
+    model = None
     x_test = torch.tensor(data_test.drop(["time", "event"], axis=1).values, dtype=torch.float, device=device)
     surv_preds, _, _ = make_mtlr_prediction(model, x_test, time_bins, config)
     time_bins = torch.cat([torch.tensor([0]).to(time_bins.device), time_bins], 0)

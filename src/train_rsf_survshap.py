@@ -11,6 +11,8 @@ from sksurv.metrics import concordance_index_censored
 from sksurv.ensemble import RandomSurvivalForest
 from survshap import SurvivalModelExplainer, PredictSurvSHAP, ModelSurvSHAP
 
+from survshap.model_explanations.utils import aggregate_change
+
 if __name__ == "__main__":
     # Load data
     dl = SyntheticDataLoader().load_data()
@@ -41,21 +43,39 @@ if __name__ == "__main__":
 
     # create explainer
     explainer = SurvivalModelExplainer(model=model, data=X_train, y=y_train)
-
+    model_survshap = ModelSurvSHAP(calculation_method="treeshap")
+    model_survshap.fit(explainer=explainer, new_observations=X_test)
+    
+    # Get SHAP values
+    result = model_survshap.full_result.copy()
+    aggregation_method="sum_of_squares"
+    result["aggregated_change"] = aggregate_change(result.iloc[:, 5:],
+                                                   "sum_of_squares",
+                                                   model_survshap.timestamps)
+    idx = result.groupby('index')['aggregated_change'].idxmax()
+    most_important_variables = result.loc[idx]
+    most_important_counts = most_important_variables['variable_name'].value_counts()
+    total_ids = result['index'].nunique()
+    norm_counts = most_important_counts / most_important_counts.sum() * total_ids
+    print(norm_counts)
+    
     # compute SHAP values for a single instance
-    observation_A = X_test.iloc[[0]]
-    survshap_A = PredictSurvSHAP()
-    survshap_A.fit(explainer=explainer, new_observation=observation_A)
+    #observation_A = X_test.iloc[[0]]
+    #survshap_A = PredictSurvSHAP()
+    #survshap_A.fit(explainer=explainer, new_observation=observation_A)
 
-    survshap_A.result
-    survshap_A.plot()
+    #survshap_A.result
+    #survshap_A.plot()
 
     # compute SHAP values for a group of instances
-    model_survshap = ModelSurvSHAP(calculation_method="treeshap") # fast implementation for tree-based models
-    model_survshap.fit(explainer=explainer, new_observations=observation_A)
+    #model_survshap = ModelSurvSHAP(calculation_method="treeshap") # fast implementation for tree-based models
+    #model_survshap.fit(explainer=explainer, new_observations=X_test)
 
-    model_survshap.result
-    model_survshap.plot_mean_abs_shap_values()
-    model_survshap.plot_shap_lines_for_all_individuals(variable="x1")
-    extracted_survshap = model_survshap.individual_explanations[0] # PredictSurvSHAP object
+    #mean_shap_values = model_survshap.get_mean_abs_shap_values()
+
+    #model_survshap.result
+    
+    #model_survshap.plot_mean_abs_shap_values()
+    #model_survshap.plot_shap_lines_for_all_individuals(variable="x1")
+    #extracted_survshap = model_survshap.individual_explanations[0] # PredictSurvSHAP object
     

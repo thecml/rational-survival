@@ -123,6 +123,7 @@ class ModelSurvSHAP:
         result["aggregated_change"] = aggregate_change(result.iloc[:, 5:], aggregation_method, self.timestamps)
         result = result.sort_values("aggregated_change", ascending=False)
         self.result = result
+        return self.result
 
     def plot_mean_abs_shap_values(
         self,
