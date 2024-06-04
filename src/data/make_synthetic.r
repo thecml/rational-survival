@@ -55,11 +55,16 @@ for (dist in dists) {
 }
 
 # Make time-dependent effects datasets
-tde <- c(x1 = 0.1, x2 = -0.1, x3 = 0.2)  # Time-dependent effects
 tdefunction <- function(t) {
-  ifelse(t < 25, c(x1 = 1, x2 = 0.5, x3 = 0.2),  # Early: x1 > x2 > x3
-         ifelse(t < 50, c(x1 = 0.2, x2 = 1, x3 = 0.5),  # Mid: x2 > x3 > x1
-                c(x1 = 0.1, x2 = 0.5, x3 = 1)))  # Late: x3 > x2 > x1
+  if (t < 25) {
+    c(x1 = 1, x2 = 0.5, x3 = 0.2, x4 = 0.1)  # Early: x1 > x2 > x3 > x4
+  } else if (t < 50) {
+    c(x1 = 0.5, x2 = 1, x3 = 0.75, x4 = 0.25)  # Mid: x2 > x3 > x4 > x1
+  } else if (t < 75) {
+    c(x1 = 0.25, x2 = 0.75, x3 = 1, x4 = 0.5)  # Mid-late: x2 > x3 > x4 > x1
+  } else {
+    c(x1 = 0.1, x2 = 0.25, x3 = 0.5, x4 = 1)  # Late: x4 > x3 > x2 > x1
+  }
 }
 
 # Loop through each distribution
