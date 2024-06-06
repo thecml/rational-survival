@@ -44,11 +44,11 @@ class Encoder(nn.Module):
         return self._get_name()
     
 class MHLR_rational_Model(nn.Module):
-    def __init__(self, input_size, num_time_bins, GeneratorArgs):
+    def __init__(self, num_features, num_time_bins, GeneratorArgs):
         super(MHLR_rational_Model, self).__init__()
         self.num_time_bins = num_time_bins
         self.generators = [Generator(num_features, args=GeneratorArgs) for num in range(num_time_bins)]
-        self.encoder_list = [Encoder(input_size) for num in range(num_time_bins)]
+        self.encoder_list = [Encoder(num_features) for num in range(num_time_bins)]
         self.mlps = nn.ModuleList(self.encoder_list)
         self.masks = []
         self.GeneratorArgs = GeneratorArgs
