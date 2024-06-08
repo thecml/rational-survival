@@ -49,6 +49,8 @@ device = torch.device(device)
 
 from mhlr_rat_model import MHLR_rational_Model
 
+# from mhlr_rat_model import MHLR_rational_Model
+
 def train_mhlr_rat_model(
         model,
         data_train: pd.DataFrame,
@@ -89,8 +91,17 @@ def train_mhlr_rat_model(
     x_val, y_val = reformat_survival(data_var, time_bins)
     train_loader = DataLoader(TensorDataset(x, y), batch_size=config.batch_size, shuffle=True)
     valid_loader = DataLoader(TensorDataset(x_val, y_val), batch_size=config.batch_size, shuffle=False)
+
+    losses = {
+        'epoch': [],
+        'train_nll_loss': [],
+        'train_selection_loss': [],
+        'valid_nll_loss': [],
+        'valid_selection_loss': [],
+    }
+    
     for i in pbar:
-        nll_loss = 0
+        train_nll_losses, train_selection_losses = [], []
         step = 0
 
         # Training
@@ -98,63 +109,89 @@ def train_mhlr_rat_model(
             xi = xi[:, :, None]
             output = model(xi)
             loss = mtlr_nll(output, yi, C1=0.001, average=False)
+            all_selection_loss = 0
+            train_nll_losses.append(loss.item())
+            # print ('train:', loss.item())
+            if args.get_rationales:
+                for k in range(len(model.masks)):
+                    selection_cost = model.generators[k].loss(model.masks[k], xi)
+                    all_selection_loss += args.selection_lambda * selection_cost
+
+                # all_selection_loss.backward(retain_graph=True)
+                # all_selection_loss.backward()
+                # loss += all_selection_loss
+                train_selection_losses.append(all_selection_loss.item())
             loss.backward()
             optimizer.step()
-            #print(f"{total_loss[0]} - {total_loss[5]} - {total_loss[10]}")
-            # nll_loss += (loss / train_size).item()
-
+            
+        train_nll_loss = np.sum(train_nll_losses)/x.shape[0]
+        train_selection_loss = np.sum(train_selection_losses)/x.shape[0]
+        
+            
         # Validation
         valid_rationales = defaultdict(int)
         nll_losses, selection_losses = list(), list()
         for xi, yi in valid_loader:
             xi = xi[:, :, None]
+            # print (xi.shape)
             output = model(xi)
             loss = mtlr_nll(output, yi, C1=0.001, average=False)        
-            batch_val_loss = loss.item()
-    #         if args.get_rationales:
-    #             selection_cost = generators[k].loss(masks[k], xi)
-    #             val_loss_k += args.selection_lambda * selection_cost
-    #             batch_seleciton_cost += selection_cost.detach().numpy()                
-    #             batch_rationales_k = learn.get_rationales(masks[k])
-    #             for feature_list in batch_rationales_k:
-    #                 for feature in feature_list:
-    #                     valid_rationales[feature] += 1
-
-    #             batch_val_loss += val_loss_k.detach().numpy()
-    #             batch_seleciton_cost /= n_time_bins
-    #             selection_losses.append(batch_seleciton_cost)
-
+            # print ('valid:', loss.item())
+            batch_nll_loss = loss.item()
+            if args.get_rationales:
+                selection_costs = 0
+                for k in range(len(model.masks)):
+                    selection_cost = model.generators[k].loss(model.masks[k], xi)
+                    selection_cost = args.selection_lambda * selection_cost
+                    selection_costs += selection_cost
+                    
+                    batch_rationales = learn.get_rationales(model.masks[k])
+                    for feature_list in batch_rationales:
+                        for feature in feature_list:
+                            valid_rationales[feature] += 1
+                
+                batch_val_loss = batch_nll_loss + selection_costs
+                selection_losses.append(selection_costs.item())
 
             # batch_val_loss /= n_time_bins
-            nll_losses.append(batch_val_loss)
+            nll_losses.append(batch_nll_loss)
 
-
-    #     if args.get_rationales:
-    #         valid_rationales = dict(valid_rationales)
-    #         valid_rationales = dict(sorted(valid_rationales.items(),
-    #                                        key=lambda item: item[1], reverse=True))
-
-    #         mean_valid_selection = np.mean(selection_losses)
-
-
-        mean_valid_nll = np.mean(nll_losses)
+        if args.get_rationales:
+            valid_rationales = dict(valid_rationales)
+            valid_rationales = dict(sorted(valid_rationales.items(),
+                                           key=lambda item: item[1], reverse=True))
+            # print (selection_losses)
+            mean_valid_selection = np.sum(selection_losses)/x_val.shape[0]
+        
+        mean_valid_nll = np.sum(nll_losses).item()/x_val.shape[0]
 
         pbar.set_description(f"[epoch {i: 4}/{config.num_epochs}]")
         if args.get_rationales:
-            pbar.set_postfix_str(f"Valid nll = {mean_valid_nll.item():.4f}; " )
-                                 # f"Valid selection = {mean_valid_selection:.4f};")
+            pbar.set_postfix_str(f"Train nll {train_nll_loss:.4f}; "
+                                 f"Train selection {train_selection_loss:.4f}; "
+                                 f"Valid nll = {mean_valid_nll:.4f}; "
+                                 f"Valid selection = {mean_valid_selection:.4f}; ")
+            losses['epoch'].append(i)
+            losses['train_nll_loss'].append(train_nll_loss)
+            losses['train_selection_loss'].append(train_selection_loss)
+            losses['valid_nll_loss'].append(mean_valid_nll)
+            losses['valid_selection_loss'].append(mean_valid_selection)
         else:
-            pbar.set_postfix_str(f"Valid nll = {mean_valid_nll.item():.4f};")
+            pbar.set_postfix_str(f"Train nll {nll_loss/len(train_loader)}; ",
+                                 f"Valid nll = {mean_valid_nll.item():.4f};")
         if config.early_stop:
             if best_val_nll > mean_valid_nll:
                 best_val_nll = mean_valid_nll
                 best_ep = i
             if (i - best_ep) > config.patience:
                 break
-
+        # break
+        
     end_time = datetime.now()
     training_time = end_time - start_time
-    return model
+    losses_df = pd.DataFrame(losses)
+
+    return losses_df, model
 
 # Load data
 dl = SyntheticDataLoader().load_data()
@@ -200,7 +237,6 @@ args['dropout'] = 0.25
 n_intervals = len(time_bins)
 config = dotdict(cfg.PARAMS_MTLR)
 
-from mhlr_rat_model import MHLR_rational_Model
 num_time_bins = len(time_bins)+1
 
 model = MHLR_rational_Model(5, num_time_bins, args)
@@ -208,8 +244,9 @@ model = MHLR_rational_Model(5, num_time_bins, args)
 random_state = 0
 reset_model=True
 config.early_stop = False
-
-model = train_mhlr_rat_model(model, data_train, data_var, time_bins,
+config.num_epochs = 350
+args.get_rationales = True
+losses_df, model = train_mhlr_rat_model(model, data_train, data_var, time_bins,
                                             config, random_state=0, reset_model=True, device=device, args=args)
 
 x_test = torch.tensor(data_test.drop(["time", "event"], axis=1).values, dtype=torch.float, device=device)
@@ -218,11 +255,17 @@ x_test = x_test[:, :, None]
 surv_preds, _, _ = make_mtlr_prediction(model, x_test, time_bins, config)
 survival_prob = surv_preds.T.detach().numpy()
 
-time_bins = torch.cat([torch.tensor([0]).to(time_bins.device), time_bins])
+test_time_bins = torch.cat([torch.tensor([0]).to(time_bins.device), time_bins])
 survival_curves = pd.DataFrame.from_records(survival_prob, 
-                         index=np.array(time_bins))
+                         index=np.array(test_time_bins))
 
 from evaluation import ISD_evaluation # check the path
+
+################ bugs in sythentic data ################
+new_index = survival_curves.index.tolist()
+new_index[1] = 0.1
+survival_curves.index = new_index
+################ bugs in sythentic data ################
 
 ISD_eval_dict = ISD_evaluation(survival_curves, data_test[['time', 'event']], data_test[['time', 'event']], verbose=False)
 ISD_eval_dict['d_cal'] = ISD_eval_dict['d_cal'][0] >= 0.05

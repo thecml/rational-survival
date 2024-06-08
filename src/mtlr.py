@@ -426,14 +426,15 @@ def train_mtlr_model(
             xi, yi = xi.to(device), yi.to(device)
             optimizer.zero_grad()
             y_pred = model.forward(xi)
-            loss = mtlr_nll(y_pred, yi, model, C1=config.c1, average=False)
+            # print (config.c1)
+            loss = mtlr_nll(y_pred, yi, model=model, C1=config.c1, average=False)
 
             loss.backward()
             optimizer.step()
 
             nll_loss += (loss / train_size).item()
         logits_outputs = model.forward(x_val)
-        eval_nll = mtlr_nll(logits_outputs, y_val, model, C1=0, average=True)
+        eval_nll = mtlr_nll(logits_outputs, y_val, model=model, C1=0, average=True)
         pbar.set_description(f"[epoch {i + 1: 4}/{config.num_epochs}]")
         pbar.set_postfix_str(f"nll-loss = {nll_loss:.4f}; "
                              f"Validation nll = {eval_nll.item():.4f};")
@@ -452,7 +453,8 @@ def mtlr_nll(
         logits: torch.Tensor,
         target: torch.Tensor,
         C1: float,
-        average: bool = False
+        average: bool = False,
+        model= None #torch.nn.Module,
 ) -> torch.Tensor:
     """Computes the negative log-likelihood of a batch of model predictions.
 
@@ -487,6 +489,11 @@ def mtlr_nll(
     if average:
         nll_total = nll_total / target.size(0)
 
+    # # L2 regularization
+    # for k, v in model.named_parameters():
+    #     if "mtlr_weight" in k:
+    #         nll_total += C1/2 * torch.sum(v**2)
+        
     return nll_total
 
 def masked_logsumexp(

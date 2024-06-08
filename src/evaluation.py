@@ -1,6 +1,6 @@
 import sys,os
-# sys.path.append('./SurvivalEVAL/')
-sys.path.append('/home/weijiesun/survival_project/SurvivalEVAL/')
+sys.path.append('./SurvivalEVAL/')
+# sys.path.append('/home/weijiesun/survival_project/SurvivalEVAL/')
 from Evaluator import LifelinesEvaluator
 
 def ISD_evaluation(survival_curves, y_test, y_train, verbose=True):
