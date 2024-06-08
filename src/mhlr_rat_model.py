@@ -31,9 +31,13 @@ class Encoder(nn.Module):
     def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         if not mask is None:
             x_mask = x * mask.unsqueeze(-1)
-        x_mask = x_mask.squeeze(-1)
+            x_mask = x.squeeze(-1)
+        else:
+            x_mask = x.squeeze(-1)
         # logits = self.dropout(self.relu(self.fc(x_mask)))
         logits = self.fc(x_mask)
+        logits = self.relu(logits)
+        logits = self.dropout(logits)
         
         return logits
 
