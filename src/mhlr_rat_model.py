@@ -57,11 +57,11 @@ class MHLR_rational_Model(nn.Module):
         self.masks = []
         self.GeneratorArgs = GeneratorArgs
 
-    def forward(self, x):
+    def forward(self, x, test=False):
         self.masks = []
         if self.GeneratorArgs.get_rationales:
             for gen in self.generators:
-                mask, _ = gen(x)
+                mask, _ = gen(x, test)
                 self.masks.append(mask)
         else:
             for gen in self.generators:
@@ -70,8 +70,7 @@ class MHLR_rational_Model(nn.Module):
         x = [self.encoder_list[i](x, self.masks[i]) for i in range(len(self.encoder_list))]
         outputs = torch.cat(x, axis=1)
         return outputs
-    
-    
+        
 class MHLR(nn.Module):
     """Multi-task logistic regression for individualised
     survival prediction.

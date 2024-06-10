@@ -74,7 +74,6 @@ def train_mhlr_rat_model(
     # Make optimizers
     optimizer = optim.Adam(model.parameters(), lr=config.lr)
 
-
     # if reset_model:
     #     model.reset_parameters()
 

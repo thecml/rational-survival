@@ -28,7 +28,7 @@ class Generator(nn.Module):
         z = probs[:,:,1] # shape = [B, N_FT]
         return z
 
-    def forward(self, x_indx):
+    def forward(self, x_indx, test=False):
         '''
         Given input x_indx of dim (batch, length), return z (batch, length) such that z
         can act as element-wise mask on x
@@ -39,16 +39,16 @@ class Generator(nn.Module):
         
         activ = x
         z = self.z_forward(F.relu(activ))
-        mask = self.sample(z)
+        mask = self.sample(z, test=test)
         return mask, z
 
-    def sample(self, z):
+    def sample(self, z, test=False):
         '''
         Get mask from probablites at each token. Use gumbel
         softmax at train time, hard mask at test time
         '''
         mask = z
-        if self.training:
+        if not test:
             mask = z
         else:
             mask = learn.get_hard_mask(z)
