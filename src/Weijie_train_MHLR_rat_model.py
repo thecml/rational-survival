@@ -46,7 +46,6 @@ random.seed(0)
 device = "cpu" # use CPU
 device = torch.device(device)
 
-
 from mhlr_rat_model import MHLR_rational_Model
 
 np.random.seed(0)
@@ -94,13 +93,16 @@ def train_mhlr_rat_model(
     train_loader = DataLoader(TensorDataset(x, y), batch_size=config.batch_size, shuffle=True)
     valid_loader = DataLoader(TensorDataset(x_val, y_val), batch_size=config.batch_size, shuffle=False)
 
+    
     losses = {
         'epoch': [],
         'train_nll_loss': [],
-        'train_selection_loss': [],
         'valid_nll_loss': [],
-        'valid_selection_loss': [],
     }
+    if args.get_rationales:
+        losses['train_selection_loss'] = []
+        losses['valid_selection_loss'] = []
+        
     
     for i in pbar:
         train_nll_losses, train_selection_losses = [], []
@@ -145,7 +147,7 @@ def train_mhlr_rat_model(
                 selection_costs = 0
                 for k in range(len(model.masks)):
                     selection_cost = model.generators[k].loss(model.masks[k], xi)
-                    selection_cost = args.selection_lambda * selection_cost
+                    selection_cost = args.selection_lambda * selection_cost#
                     selection_costs += selection_cost
                     
                     batch_rationales = learn.get_rationales(model.masks[k])
@@ -179,8 +181,11 @@ def train_mhlr_rat_model(
             losses['valid_nll_loss'].append(mean_valid_nll)
             losses['valid_selection_loss'].append(mean_valid_selection)
         else:
-            pbar.set_postfix_str(f"Train nll {nll_loss/len(train_loader)}; ",
-                                 f"Valid nll = {mean_valid_nll.item():.4f};")
+            pbar.set_postfix_str(f"Train nll {train_nll_loss:.4f}; "
+                                 f"Valid nll = {mean_valid_nll:.4f};")
+            losses['epoch'].append(i)
+            losses['train_nll_loss'].append(train_nll_loss)
+            losses['valid_nll_loss'].append(mean_valid_nll)
         if config.early_stop:
             if best_val_nll > mean_valid_nll:
                 best_val_nll = mean_valid_nll
@@ -238,6 +243,7 @@ num_features = X_train.shape[1]
 # Make generators
 args = dotdict(cfg.PARAMS_RATIONAL)
 args['dropout'] = 0.25
+args['selection_lambda'] = 0.001
 n_intervals = len(time_bins)
 config = dotdict(cfg.PARAMS_MTLR)
 
@@ -247,8 +253,8 @@ model = MHLR_rational_Model(5, num_time_bins, args)
 # model
 random_state = 0
 reset_model=True
-config.early_stop = False
-config.num_epochs = 350
+config.early_stop = True
+config.num_epochs = 1000
 args.get_rationales = True
 losses_df, model = train_mhlr_rat_model(model, data_train, data_var, time_bins,
                                             config, random_state=0, reset_model=True, device=device, args=args)
