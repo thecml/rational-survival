@@ -49,7 +49,9 @@ device = torch.device(device)
 
 from mhlr_rat_model import MHLR_rational_Model
 
-# from mhlr_rat_model import MHLR_rational_Model
+np.random.seed(0)
+torch.manual_seed(0)
+random.seed(0)
 
 def train_mhlr_rat_model(
         model,
@@ -73,6 +75,7 @@ def train_mhlr_rat_model(
 
     # Make optimizers
     optimizer = optim.Adam(model.parameters(), lr=config.lr)
+
 
     # if reset_model:
     #     model.reset_parameters()
@@ -114,12 +117,13 @@ def train_mhlr_rat_model(
             if args.get_rationales:
                 for k in range(len(model.masks)):
                     selection_cost = model.generators[k].loss(model.masks[k], xi)
-                    all_selection_loss += args.selection_lambda * selection_cost
+                    all_selection_loss += args.selection_lambda * selection_cost #args.selection_lambda * selection_cost
 
                 # all_selection_loss.backward(retain_graph=True)
                 # all_selection_loss.backward()
-                # loss += all_selection_loss
+                loss += all_selection_loss
                 train_selection_losses.append(all_selection_loss.item())
+
             loss.backward()
             optimizer.step()
             
@@ -148,7 +152,6 @@ def train_mhlr_rat_model(
                     for feature_list in batch_rationales:
                         for feature in feature_list:
                             valid_rationales[feature] += 1
-                
                 batch_val_loss = batch_nll_loss + selection_costs
                 selection_losses.append(selection_costs.item())
 
@@ -161,7 +164,7 @@ def train_mhlr_rat_model(
                                            key=lambda item: item[1], reverse=True))
             # print (selection_losses)
             mean_valid_selection = np.sum(selection_losses)/x_val.shape[0]
-        
+
         mean_valid_nll = np.sum(nll_losses).item()/x_val.shape[0]
 
         pbar.set_description(f"[epoch {i: 4}/{config.num_epochs}]")
@@ -191,6 +194,8 @@ def train_mhlr_rat_model(
     losses_df = pd.DataFrame(losses)
 
     return losses_df, model
+
+
 
 # Load data
 dl = SyntheticDataLoader().load_data()
