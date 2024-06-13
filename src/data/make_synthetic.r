@@ -1,37 +1,106 @@
 # Create the covariates data frame
 library('simsurv')
 
-N <- 500
+# Define N, maxt
+N <- 100
+maxt <- 100
+
+# Make covariates
 covs <- data.frame(id = 1:N,
-                   A = rbinom(N, 1, 0.5),
-                   B = rbinom(N, 1, 0.5),
-                   C = rbinom(N, 1, 0.5),
-                   D = rnorm(N, mean = 10, sd = 2),
-                   E = rnorm(N, mean = 0, sd = 1))
+                   x1 = rbinom(N, 1, 0.5),
+                   x2 = rbinom(N, 1, 0.5),
+                   x3 = rbinom(N, 1, 0.5),
+                   x4 = rnorm(N, mean = 10, sd = 2),
+                   x5 = rnorm(N, mean = 0, sd = 1))
 
-# Simulate the survival data
-simdat <- simsurv(
-  dist = "weibull",
-  lambdas = 0.005,
-  gammas = 1.25,
-  betas = c(A = -0.3, B = -0.2, C = -0.1, D = 0.01), # Baseline effects
-  x = covs,
-  tde = c(A = 0.1, B = -0.1, C = 0.2),    # Time-dependent effects
-  tdefunction = function(t) {
-    ifelse(t < 25, c(A = 1, B = 0.5, C = 0.2),  # Early: A > B > C
-           ifelse(t < 50, c(A = 0.2, B = 1, C = 0.5),  # Mid: B > C > A
-                  c(A = 0.1, B = 0.5, C = 1)))  # Late: C > B > A
-  },
-  maxt = 100
-)
+# Make time-independent effects datasets
+# Define the distributions and the parameters
+dists <- c("exp", "weibull", "gompertz")
+lambdas <- 0.005
+gammas <- 1.25
+betas <- c(x1 = 0.8, x2 = 0.5, x3 = 0.25, x4 = 0.1)  # Baseline effects
 
-# Make integer
-simdat$eventtime <- round(simdat$eventtime)
+# Loop through each distribution
+for (dist in dists) {
+  if (dist == "exp") {
+    simdat <- simsurv(
+      dist = dist,
+      lambdas = lambdas,
+      betas = betas,
+      x = covs,
+      maxt = maxt
+    )
+  } else {
+    simdat <- simsurv(
+      dist = dist,
+      lambdas = lambdas,
+      gammas = gammas,
+      betas = betas,
+      x = covs,
+      maxt = maxt
+    )
+  }
 
-# Merge the simulated data with the covariates
-simdat <- merge(simdat, covs)
+  # Round event times
+  simdat$eventtime <- round(simdat$eventtime)
 
-print(head(simdat))
+  # Merge with covariates
+  simdat <- merge(simdat, covs)
 
-# Save file
-write.csv(simdat, file = "data/data.csv", row.names = FALSE)
+  # Create file name
+  file_name <- paste0("data/", dist, "_time_indep.csv")
+ 
+  # Save to CSV
+  write.csv(simdat, file = file_name, row.names = FALSE)
+}
+
+# Make time-dependent effects datasets
+tdefunction <- function(t) {
+  if (t < 25) {
+    c(x1 = 1, x2 = 0.5, x3 = 0.2, x4 = 0.1)  # Early: x1 > x2 > x3 > x4
+  } else if (t < 50) {
+    c(x1 = 0.5, x2 = 1, x3 = 0.75, x4 = 0.25)  # Mid: x2 > x3 > x4 > x1
+  } else if (t < 75) {
+    c(x1 = 0.25, x2 = 0.75, x3 = 1, x4 = 0.5)  # Mid-late: x2 > x3 > x4 > x1
+  } else {
+    c(x1 = 0.1, x2 = 0.25, x3 = 0.5, x4 = 1)  # Late: x4 > x3 > x2 > x1
+  }
+}
+
+# Loop through each distribution
+for (dist in dists) {
+  if (dist == "exp") {
+    simdat <- simsurv(
+      dist = dist,
+      lambdas = lambdas,
+      betas = betas,
+      x = covs,
+      tde = tde,
+      tdefunction = tdefunction,
+      maxt = maxt
+    )
+  } else {
+    simdat <- simsurv(
+      dist = dist,
+      lambdas = lambdas,
+      gammas = gammas,
+      betas = betas,
+      x = covs,
+      tde = tde,
+      tdefunction = tdefunction,
+      maxt = maxt
+    )
+  }
+
+  # Round event times
+  simdat$eventtime <- round(simdat$eventtime)
+
+  # Merge with covariates
+  simdat <- merge(simdat, covs)
+
+  # Create file name
+  file_name <- paste0("data/", dist, "_time_dep.csv")
+
+  # Save to CSV
+  write.csv(simdat, file = file_name, row.names = FALSE)
+}

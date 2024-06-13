@@ -44,7 +44,7 @@ if __name__ == "__main__":
     # create explainer
     explainer = SurvivalModelExplainer(model=model, data=X_train, y=y_train)
     model_survshap = ModelSurvSHAP(calculation_method="treeshap")
-    model_survshap.fit(explainer=explainer, new_observations=X_test)
+    model_survshap.fit(explainer=explainer, new_observations=X_test[:100])
     
     # Get SHAP values
     result = model_survshap.full_result.copy()
