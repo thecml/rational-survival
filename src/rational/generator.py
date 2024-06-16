@@ -58,5 +58,5 @@ class Generator(nn.Module):
         '''
         Compute the generator specific costs, i.e selection cost, continuity cost, and global vocab cost
         '''
-        selection_cost = torch.mean(torch.sum(mask, dim=0))
+        selection_cost = torch.mean(torch.sum(mask, dim=1))
         return selection_cost

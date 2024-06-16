@@ -51,8 +51,8 @@ class SyntheticDataLoader(BaseDataLoader):
     """
     Data loader for synthetic data
     """
-    def load_data(self):
-        file_path = os.path.join(cfg.DATA_DIR, "data.csv")
+    def load_data(self, data_path = "data.csv"):
+        file_path = os.path.join(cfg.DATA_DIR, data_path)
         raw_data = pd.read_csv(file_path)
         self.X = raw_data.drop(['id', 'eventtime', 'status'], axis=1)
         self.y = convert_to_structured(raw_data['eventtime'], raw_data['status'])
